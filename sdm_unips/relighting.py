@@ -5,7 +5,7 @@ Scalable, Detailed and Mask-free Universal Photometric Stereo Network (CVPR2023)
 """
 
 from __future__ import print_function, division
-from modules.utils.render import *
+from .modules.utils.render import *  # Changed from: modules.utils.render
 import sys, time
 sys.path.append('..') # add parent directly for importing
 import cv2

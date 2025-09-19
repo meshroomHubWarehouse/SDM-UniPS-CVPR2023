@@ -5,9 +5,9 @@ Scalable, Detailed and Mask-free Universal Photometric Stereo Network (CVPR2023)
 """
 
 from __future__ import print_function, division
-from modules.model.model_utils import *
-from modules.builder import builder
-from modules.io import dataio
+from .modules.model.model_utils import *
+from .modules.builder import builder  # Changed from: modules.builder
+from .modules.io import dataio  # Changed from: modules.io
 import sys
 import argparse
 import time

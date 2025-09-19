@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdm-unips"
+version = "1.0.0"
+description = "Scalable, Detailed and Mask-free Universal Photometric Stereo Network (CVPR2023)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT License with a non-commercial clause"}
+authors = [
+    {name = "Satoshi Ikehata", email = "ikehata@nii.ac.jp"}
+]
+keywords = ["photometric stereo", "computer vision", "3d reconstruction", "neural networks"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "torchaudio>=2.0.0",
+    "opencv-python>=4.8.0",
+    "einops>=0.6.0",
+    "numpy>=1.25.0",
+    "numpy<2.0.0",  # to avoid the issue with numpy 2.0.0
+    "imageio>=2.31.0",
+    "matplotlib>=3.7.0",
+    "pillow>=9.4.0",
+    "psutil",
+]
+
+[project.urls]
+Homepage = "https://github.com/satoshi-ikehata/SDM-UniPS-CVPR2023"
+Repository = "https://github.com/satoshi-ikehata/SDM-UniPS-CVPR2023"
+"Bug Reports" = "https://github.com/satoshi-ikehata/SDM-UniPS-CVPR2023/issues"
+"Paper" = "https://arxiv.org/abs/2303.15724"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sdm_unips*"]
+exclude = ["tests*", "*.tests*", "*.tests"]
+
+[tool.setuptools.package-data]
+"sdm_unips" = ["**/*.py"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+
+[tool.setuptools]
+zip-safe = false

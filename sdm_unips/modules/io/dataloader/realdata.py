@@ -103,7 +103,7 @@ class dataloader():
                 n_true = N
 
                 # Based on object mask, crop boudning rectangular area 
-                if  mask_flag == True:
+                if mask_flag == True:
                     rows, cols = np.nonzero(mask)
                     rowmin = np.min(rows)
                     rowmax = np.max(rows)
@@ -161,7 +161,6 @@ class dataloader():
                 img  = img[r_s:r_e, c_s:c_e, :] 
                 if i == 0:
                     N = N[r_s:r_e, c_s:c_e, :]  
-
 
             h = int(np.floor(np.max([img.shape[0], img.shape[1]]) / 512) * 512)
             if h > max_image_resolution:

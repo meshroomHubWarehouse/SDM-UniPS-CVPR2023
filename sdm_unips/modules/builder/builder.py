@@ -8,9 +8,9 @@ Scalable, Detailed and Mask-free Universal Photometric Stereo Network (CVPR2023)
 import torch
 import torch.nn.functional as F
 import numpy as np
-from modules.model import model, decompose_tensors
-from modules.model.model_utils import *
-from modules.utils import compute_mae
+from ..model import model, decompose_tensors  # Changed from: modules.model
+from ..model.model_utils import *
+from ..utils.render import *  # Changed from: modules.utils.render
 import cv2
 import glob
 
@@ -157,9 +157,10 @@ class builder():
                         thresh = 90
                         emap[emap>=thresh] = thresh
                         emap = emap/thresh
-                        cv2.imwrite(f'{testdata.data.data_workspace}/error.png', 255*emap)     
+                        cv2.imwrite(f'{testdata.data.data_workspace}/error.png', 255*emap, [cv2.IMWRITE_PNG_COMPRESSION, 0])     
                     
-                    cv2.imwrite(f'{testdata.data.data_workspace}/normal.png', 255*(0.5 * (1+nout[:,:,::-1])))                                      
+                    nout_16bits = np.uint16(np.clip(65535*(0.5 * (1+nout[:,:,::-1])), 0, 65535))
+                    cv2.imwrite(f'{testdata.data.data_workspace}/normal.png', nout_16bits, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
                 if 'brdf' in self.args.target:
                     base = cv2.resize(base.cpu().numpy(), dsize=(c_e-c_s, r_e-r_s), interpolation=cv2.INTER_CUBIC)
@@ -168,17 +169,20 @@ class builder():
 
                     bout = np.zeros((h_, w_, 3), np.float32)
                     bout[r_s:r_e, c_s:c_e,:] = base
-                    cv2.imwrite(f'{testdata.data.data_workspace}/baseColor.png', 255*bout[:,:,::-1])
+                    bout_16bits = np.uint16(np.clip(65535*bout[:,:,::-1], 0, 65535))
+                    cv2.imwrite(f'{testdata.data.data_workspace}/baseColor.png', bout_16bits, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
                     rout = np.zeros((h_, w_), np.float32)
                     rout[r_s:r_e, c_s:c_e] = rough
-                    cv2.imwrite(f'{testdata.data.data_workspace}/roughness.png', 255*rout[:,:])
+                    rout_16bits = np.uint16(np.clip(65535*rout[:,:], 0, 65535))
+                    cv2.imwrite(f'{testdata.data.data_workspace}/roughness.png', rout_16bits, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
                     mout = np.zeros((h_, w_), np.float32)
                     mout[r_s:r_e, c_s:c_e] = metal
-                    cv2.imwrite(f'{testdata.data.data_workspace}/metallic.png', 255*mout[:,:])
+                    mout_16bits = np.uint16(np.clip(65535*mout[:,:], 0, 65535))
+                    cv2.imwrite(f'{testdata.data.data_workspace}/metallic.png', mout_16bits, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
-             
+
 
 
 
