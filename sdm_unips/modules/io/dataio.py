@@ -8,6 +8,8 @@ import glob
 import torch.utils.data as data
 from .dataloader import realdata
 import numpy as np
+import logging
+
 
 class dataio(data.Dataset):
     def __init__(self, mode, args):
@@ -29,11 +31,11 @@ class dataio(data.Dataset):
         self.mode = mode
         self.max_image_resolution = None
         
-        print('Exploring %s' % (data_root))
+        logging.info('Exploring %s' % (data_root))
         objlist = glob.glob(f"{data_root}/*{extension}")
         objlist = sorted(objlist)
         self.objlist = objlist
-        print(f"Found {len(self.objlist)} objects!\n")
+        logging.info(f"Found {len(self.objlist)} objects!\n")
         self.data = realdata.dataloader(self.numberOfImageBuffer, mask_margin=self.mask_margin, outdir=self.outdir)
 
     def __getitem__(self, index_):

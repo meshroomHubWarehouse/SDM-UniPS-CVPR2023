@@ -9,6 +9,7 @@ import os
 import numpy as np
 import cv2
 import re
+import logging
 
 class dataloader():
     def __init__(self, numberOfImages = None, outdir = '.', mask_margin=16, ctype='ORTHO'):
@@ -35,12 +36,14 @@ class dataloader():
         self.data_workspace = f'{self.outdir}/results/{self.objname}'
         os.makedirs(self.data_workspace, exist_ok=True)
 
-        print(f'Testing on {self.objname}')
+        logging.info(f'Testing on {self.objname}')
 
 
         directlist = []
         [directlist.append(p) for p in glob.glob(objdir + '/%s[!.txt]' % prefix, recursive=True) if os.path.isfile(p)]
         directlist = sorted(directlist)
+        logging.info(f'Found {len(directlist)} images in total.')
+        logging.debug(f'Image paths: {directlist}')
 
         if len(directlist) == 0:
             return False
@@ -55,7 +58,7 @@ class dataloader():
         else:
             indexset = range(len(directlist))
         numberOfImages = np.min([len(indexset), self.numberOfImages])
-        print(f"image index: {indexset}")
+        logging.info(f"image index: {indexset}")
 
         for i, indexofimage in enumerate(indexset):
             img_path = directlist[indexofimage]
@@ -168,7 +171,7 @@ class dataloader():
             if h < 512:
                 h = 512
             if i == 0:
-                print(f"original crop size: {img.shape[0]} x {img.shape[1]}\nresized crop size: {h} x {h}")
+                logging.info(f"original crop size: {img.shape[0]} x {img.shape[1]}\nresized crop size: {h} x {h}")
                 
             w = h
             img = cv2.resize(img, dsize=(h, w),interpolation=cv2.INTER_CUBIC)
@@ -219,4 +222,4 @@ class dataloader():
         else:
             self.mask = np.ones(mask.shape, np.float32)
         
-        print(f'number of images: {I.shape[3]} / {self.numberOfImages} (max)\n')
+        logging.info(f'number of images: {I.shape[3]} / {self.numberOfImages} (max)\n')

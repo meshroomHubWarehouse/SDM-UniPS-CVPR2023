@@ -8,11 +8,12 @@ Scalable, Detailed and Mask-free Universal Photometric Stereo Network (CVPR2023)
 import torch
 import torch.nn.functional as F
 import numpy as np
+import cv2
+import glob
 from ..model import model, decompose_tensors  # Changed from: modules.model
 from ..model.model_utils import *
 from ..utils.render import *  # Changed from: modules.utils.render
-import cv2
-import glob
+
 
 class builder():
     def __init__(self, args, device):
