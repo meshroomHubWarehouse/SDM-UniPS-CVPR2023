@@ -69,3 +69,4 @@ target-version = ['py38']
 
 [tool.setuptools]
 zip-safe = false
+py-modules = ["inference_sfm"]
