@@ -680,11 +680,18 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
             view_ids = [str(v["viewId"]) for v in views]
             mask = find_mask_for_pose(pose_id, mask_folder, view_ids, views=views)
 
-            # Save extracted mask if output folder is set
+            # Save extracted mask at output resolution (match downscaled images)
             if mask is not None and mask_output_folder and not mask_folder:
                 os.makedirs(mask_output_folder, exist_ok=True)
                 mask_path = os.path.join(mask_output_folder, f"{pose_id}.png")
-                cv2.imwrite(mask_path, np.uint8(mask * 255))
+                mask_to_save = mask
+                # Resize mask to match downscaled image dimensions
+                img_h, img_w = images[0].shape[:2]
+                if mask.shape[0] != img_h or mask.shape[1] != img_w:
+                    mask_to_save = cv2.resize(
+                        mask, (img_w, img_h),
+                        interpolation=cv2.INTER_NEAREST)
+                cv2.imwrite(mask_path, np.uint8(mask_to_save * 255))
                 logger.info("Saved mask to %s", mask_path)
 
             # Preprocess (crop, resize, normalize) -- reproduces realdata.py
