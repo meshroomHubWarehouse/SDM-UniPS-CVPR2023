@@ -18,6 +18,8 @@ import logging
 import os
 import time
 
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+
 import cv2
 import numpy as np
 import torch
@@ -114,11 +116,55 @@ def load_images_for_pose(views, nb_img=10, downscale=1):
     return imgs
 
 
+def _extract_interior_mask(mask_uint8):
+    """Extract interior (object) region from a binary mask, removing
+    border-connected white regions (undistortion validity corners).
+
+    Uses connected components on the mask and keeps only components that
+    do NOT touch any image edge.  Returns None if all components touch
+    the border (no interior object found).
+
+    Args:
+        mask_uint8: binary mask (0 or 1), uint8, shape (H, W)
+
+    Returns:
+        cleaned mask (0 or 1), uint8, same shape.  None if no interior
+        object mask found.
+    """
+    h, w = mask_uint8.shape
+    mask_255 = (mask_uint8 * 255).astype(np.uint8) if mask_uint8.max() <= 1 \
+        else mask_uint8.copy()
+
+    num_labels, labels = cv2.connectedComponents(mask_255)
+    result = np.zeros((h, w), dtype=np.uint8)
+
+    for label_id in range(1, num_labels):
+        component = (labels == label_id)
+        touches_border = (
+            np.any(component[0, :]) or np.any(component[-1, :]) or
+            np.any(component[:, 0]) or np.any(component[:, -1])
+        )
+        if not touches_border:
+            result[component] = 1
+            logger.info("Keeping interior alpha component (label %d, "
+                        "%d px)", label_id, int(component.sum()))
+        else:
+            logger.info("Removing border-touching alpha component (label %d, "
+                        "%d px)", label_id, int(component.sum()))
+
+    if result.max() == 0:
+        logger.info("All alpha components touch border — no interior object")
+        return None
+
+    return result
+
+
 def extract_alpha_mask(views):
     """Extract mask by ANDing all alpha channels from the pose's images.
 
-    Images with all-white alpha are skipped. The result is the intersection
-    of all non-trivial alpha masks (logical AND), keeping only the object area.
+    Images with all-white alpha are skipped.  For each image, border-connected
+    white regions (undistortion validity) are removed, keeping only interior
+    object regions.
 
     Returns a 2D float32 array (H, W) with 0/1 values, or None.
     """
@@ -135,11 +181,18 @@ def extract_alpha_mask(views):
         # Skip all-white (trivial) alpha channels
         if alpha.min() > 250:
             continue
-        mask = (alpha > 0).astype(np.float32)
+        mask = (alpha > 127).astype(np.uint8)
+        # Remove border-connected regions (undistortion validity)
+        cleaned = _extract_interior_mask(mask)
+        if cleaned is None:
+            logger.info("Skipping alpha from %s: no interior object mask",
+                        os.path.basename(path))
+            continue
+        mask_f = cleaned.astype(np.float32)
         if combined is None:
-            combined = mask
+            combined = mask_f
         else:
-            combined = combined * mask  # logical AND
+            combined = combined * mask_f  # logical AND
         count += 1
     if combined is not None:
         logger.info("Extracted alpha mask from %d images (AND)", count)
@@ -603,16 +656,31 @@ def save_normal_16bit(normal, out_path):
     cv2.imwrite(out_path, normal_16, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
 
+def save_normal_exr(normal, out_path):
+    """Save normal map as float32 EXR (raw [-1,1] values, BGR for cv2)."""
+    cv2.imwrite(out_path, normal[:, :, ::-1].astype(np.float32))
+
+
 def save_color_16bit(color, out_path):
     """Save a color map (albedo) as 16-bit PNG."""
     color_16 = np.uint16(np.clip(65535 * color[:, :, ::-1], 0, 65535))
     cv2.imwrite(out_path, color_16, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
 
+def save_color_exr(color, out_path):
+    """Save a color map (albedo) as float32 EXR (HDR, BGR for cv2)."""
+    cv2.imwrite(out_path, color[:, :, ::-1].astype(np.float32))
+
+
 def save_gray_16bit(gray, out_path):
     """Save a single-channel map (roughness/metallic) as 16-bit PNG."""
     gray_16 = np.uint16(np.clip(65535 * gray, 0, 65535))
     cv2.imwrite(out_path, gray_16, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+
+
+def save_gray_exr(gray, out_path):
+    """Save a single-channel map as float32 EXR."""
+    cv2.imwrite(out_path, gray.astype(np.float32))
 
 
 # ---------------------------------------------------------------------------
@@ -625,7 +693,7 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
                       use_cuda=True, target="normal_and_brdf",
                       max_image_res=4096, canonical_resolution=256,
                       pixel_samples=10000, scalable=False,
-                      mask_margin=8):
+                      mask_margin=8, output_format="png16"):
     """Run SDM-UniPS inference on all poses in an SfM file.
 
     Args:
@@ -642,6 +710,7 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
         pixel_samples: number of pixel samples for the model
         scalable: use scalable (tiled) processing for large images
         mask_margin: pixel margin around mask bounding box
+        output_format: 'png16' (16-bit PNG) or 'exr' (float32 EXR)
 
     Returns:
         Path to the output JSON file.
@@ -711,6 +780,7 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
             )
 
             # Save outputs
+            ext = ".exr" if output_format == "exr" else ".png"
             pose_results = {
                 "poseId": pose_id,
                 "viewId": str(views[0].get("viewId")),
@@ -719,8 +789,11 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
 
             if outputs["normal"] is not None:
                 nml_path = os.path.join(
-                    output_folder, f"{pose_id}_normals.png")
-                save_normal_16bit(outputs["normal"], nml_path)
+                    output_folder, f"{pose_id}_normals{ext}")
+                if output_format == "exr":
+                    save_normal_exr(outputs["normal"], nml_path)
+                else:
+                    save_normal_16bit(outputs["normal"], nml_path)
                 pose_results["normalMapPath"] = os.path.abspath(nml_path)
                 pose_results["width"] = outputs["normal"].shape[1]
                 pose_results["height"] = outputs["normal"].shape[0]
@@ -728,22 +801,31 @@ def run_sfm_inference(sfm_path, output_folder, checkpoint_path,
 
             if outputs["albedo"] is not None:
                 albedo_path = os.path.join(
-                    output_folder, f"{pose_id}_albedo.png")
-                save_color_16bit(outputs["albedo"], albedo_path)
+                    output_folder, f"{pose_id}_albedo{ext}")
+                if output_format == "exr":
+                    save_color_exr(outputs["albedo"], albedo_path)
+                else:
+                    save_color_16bit(outputs["albedo"], albedo_path)
                 pose_results["albedoMapPath"] = os.path.abspath(albedo_path)
                 logger.info("Saved albedo map: %s", albedo_path)
 
             if outputs["roughness"] is not None:
                 rough_path = os.path.join(
-                    output_folder, f"{pose_id}_roughness.png")
-                save_gray_16bit(outputs["roughness"], rough_path)
+                    output_folder, f"{pose_id}_roughness{ext}")
+                if output_format == "exr":
+                    save_gray_exr(outputs["roughness"], rough_path)
+                else:
+                    save_gray_16bit(outputs["roughness"], rough_path)
                 pose_results["roughnessMapPath"] = os.path.abspath(rough_path)
                 logger.info("Saved roughness map: %s", rough_path)
 
             if outputs["metallic"] is not None:
                 metal_path = os.path.join(
-                    output_folder, f"{pose_id}_metallic.png")
-                save_gray_16bit(outputs["metallic"], metal_path)
+                    output_folder, f"{pose_id}_metallic{ext}")
+                if output_format == "exr":
+                    save_gray_exr(outputs["metallic"], metal_path)
+                else:
+                    save_gray_16bit(outputs["metallic"], metal_path)
                 pose_results["metallicMapPath"] = os.path.abspath(metal_path)
                 logger.info("Saved metallic map: %s", metal_path)
 
@@ -799,6 +881,10 @@ def main():
                         help="Use scalable tiled inference")
     parser.add_argument("--mask-margin", type=int, default=8,
                         help="Pixel margin around mask bbox (default: 8)")
+    parser.add_argument("--output-format", default="png16",
+                        choices=["png16", "exr"],
+                        help="Output format: png16 (16-bit PNG) or "
+                             "exr (float32 EXR) (default: png16)")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Enable debug logging")
     args = parser.parse_args()
@@ -822,6 +908,7 @@ def main():
         pixel_samples=args.pixel_samples,
         scalable=args.scalable,
         mask_margin=args.mask_margin,
+        output_format=args.output_format,
     )
 
 
